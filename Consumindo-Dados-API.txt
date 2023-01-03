@@ -1,0 +1,46 @@
+let
+    #"Requisição" =
+        (numeroPagina) =>
+                Json.Document(
+                    Web.Contents("http://localhost:8080", 
+                    [
+                        RelativePath = "/medicos",
+                        Query = [
+                            page = Text.From(numeroPagina)
+                        ]
+                    ]
+                )
+            ),
+
+        #"Total Paginas" = #"Requisição"(1)[totalPages],
+
+    #"Lista Dados" = List.Generate(
+                            () => [ Pagina = 0, Consulta = #"Requisição"(0)[content]],
+                            each [Pagina] < #"Total Paginas", 
+                            each [Consulta = #"Requisição"([Pagina]+1), Pagina = [Pagina]+1],
+                            each [Consulta]
+    ),
+    #"Convertido para Tabela" = Table.FromList(#"Lista Dados", Splitter.SplitByNothing(), null, null, ExtraValues.Error),
+    
+    #"Tabela" =
+            Table.TransformColumns( 
+                Table.ExpandRecordColumn(
+                    Table.ExpandListColumn(
+                               Table.FromList(
+                                   #"Convertido para Tabela", 
+                                   Splitter.SplitByNothing(), null, null, ExtraValues.Error
+                               ),
+                                "Column!"
+                    ),
+                    "Column1", 
+                    {"id", "nome", "email", "crm", "especialidade"}, 
+                    {"Id", "Nome", "E-mail", "CRM", "Especialidade"}
+                ),
+                {
+                    "Nome",
+                    each Text.FromBinary(Text.ToBinary(_, 1252), TextEncoding.Utf8)
+                }
+            )
+
+in
+    #"Tabela"
